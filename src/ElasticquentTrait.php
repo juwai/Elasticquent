@@ -243,7 +243,17 @@ trait ElasticquentTrait
             $params['body']['sort'] = $sort;
         }
 
-        $result = $instance->getElasticSearchClient()->search($params);
+        $debugbarOutput = [];
+
+        if (!is_null($offset)) {
+            $debugbarOutput['from'] = $offset;
+        }
+        if (!is_null($limit)) {
+            $debugbarOutput['size'] = $limit;
+        }
+        $debugbarOutput = array_merge($debugbarOutput, $params['body']);
+
+        $result = static::searchWithDebugbar($params, $debugbarOutput);
 
         return static::hydrateElasticsearchResult($result);
     }
@@ -258,9 +268,9 @@ trait ElasticquentTrait
      */
     public static function complexSearch($params)
     {
-        $instance = new static;
+        $debugbarOutput = $params;
 
-        $result = $instance->getElasticSearchClient()->search($params);
+        $result = static::searchWithDebugbar($params, $debugbarOutput);
 
         return static::hydrateElasticsearchResult($result);
     }
@@ -282,9 +292,38 @@ trait ElasticquentTrait
 
         $params['body']['query']['match']['_all'] = $term;
 
-        $result = $instance->getElasticSearchClient()->search($params);
+        $debugbarOutput = $params['body'];
+
+        $result = static::searchWithDebugbar($params, $debugbarOutput);
 
         return static::hydrateElasticsearchResult($result);
+    }
+
+    /**
+     * Search ES and display information on Debugbar
+     *
+     * @param array $params parameters to be passed directly to Elasticsearch
+     * @param array $output call information for debugbar
+     *
+     * @return array
+     */
+    public static function searchWithDebugbar($params, $output)
+    {
+        $instance = new static;
+
+        // Show ES query information on Debugbar
+        if (app()->getProvider('Barryvdh\Debugbar\ServiceProvider')) {
+            $uniqueId = uniqid();
+
+            debug('ES: ' . $uniqueId . ' POST ' . $instance->getIndexName() . '/_search ' . json_encode($output));
+            start_measure($uniqueId, 'ES: ' . $uniqueId. ' ' . $instance->getIndexName() . '/_search');
+            $result = $instance->getElasticSearchClient()->search($params);
+            stop_measure($uniqueId);
+        } else {
+            $result = $instance->getElasticSearchClient()->search($params);
+        }
+
+        return $result;
     }
 
     /**
